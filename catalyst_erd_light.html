@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Catalyst DMS — Complete ERD</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #f8fafc; color: #334155; font-family: 'DM Sans', sans-serif; }
+  .header { padding: 16px 24px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; background: #f8fafce0; backdrop-filter: blur(12px); z-index: 50; }
+  .logo { display: flex; align-items: center; gap: 8px; }
+  .logo-icon { width: 22px; height: 22px; border-radius: 4px; background: linear-gradient(135deg, #3b82f6, #8b5cf6); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; color: white; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .controls { display: flex; gap: 8px; align-items: center; }
+  .controls button { background: #f1f5f9; border: 1px solid #cbd5e1; color: #475569; padding: 5px 12px; border-radius: 4px; font-size: 10px; cursor: pointer; font-family: 'JetBrains Mono', monospace; transition: all 0.2s; }
+  .controls button:hover, .controls button.active { background: #e2e8f0; color: #0f172a; }
+  .canvas { overflow: auto; padding: 16px; cursor: grab; }
+  .canvas:active { cursor: grabbing; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script type="text/babel">
+const { useState, useRef } = React;
+
+const G = {
+  ref: { label: "Reference", color: "#64748b" },
+  org: { label: "Organisation", color: "#e11d48" },
+  str: { label: "Strategy", color: "#3b82f6" },
+  exe: { label: "Execution", color: "#22c55e" },
+  gov: { label: "Governance", color: "#f59e0b" },
+  jt:  { label: "Junction Table", color: "#7c3aed" },
+};
+
+// ── All 31 od_ tables with FULL fields from schema ───────────────
+const tables = [
+  // REFERENCE
+  { id:"currencies", n:"od_currencies", g:"ref", x:30, y:60, r:60, f:[
+    {n:"id",t:"uuid",pk:1},{n:"currency_code",t:"text"},{n:"currency_name",t:"text"},{n:"symbol",t:"text"},{n:"is_default",t:"bool"}
+  ]},
+  { id:"regions", n:"od_regions", g:"ref", x:30, y:240, r:14, f:[
+    {n:"id",t:"uuid",pk:1},{n:"region",t:"text"}
+  ]},
+  { id:"countries", n:"od_countries", g:"ref", x:30, y:380, r:65, f:[
+    {n:"id",t:"uuid",pk:1},{n:"country_name",t:"text"},
+    {n:"currency_id",t:"uuid",fk:"currencies"},{n:"region_id",t:"uuid",fk:"regions"},{n:"location_ids",t:"uuid[]"}
+  ]},
+  { id:"locations", n:"od_locations", g:"ref", x:30, y:560, r:2, f:[
+    {n:"id",t:"uuid",pk:1},{n:"location_name",t:"text"},{n:"city",t:"text"},{n:"postal_code",t:"text"},
+    {n:"country_id",t:"uuid",fk:"countries"},{n:"region_id",t:"uuid",fk:"regions"}
+  ]},
+  { id:"project_types", n:"od_project_types", g:"ref", x:30, y:750, r:5, f:[
+    {n:"id",t:"uuid",pk:1},{n:"project_types",t:"text"},{n:"project_groups",t:"text"}
+  ]},
+
+  // ORGANISATION
+  { id:"companies", n:"od_companies", g:"org", x:240, y:60, r:1, f:[
+    {n:"id",t:"uuid",pk:1},{n:"company_name",t:"text"},{n:"industry",t:"text"},{n:"website",t:"text"},
+    {n:"country_id",t:"uuid",fk:"countries"},{n:"region_id",t:"uuid",fk:"regions"}
+  ]},
+  { id:"roles", n:"od_roles", g:"org", x:240, y:260, r:6, f:[
+    {n:"id",t:"uuid",pk:1},{n:"role_name",t:"text"},{n:"is_executive",t:"bool"},{n:"is_manager",t:"bool"},
+    {n:"full_name_id",t:"uuid",fk:"users"},{n:"organisational_unit_id",t:"uuid",fk:"org_units"}
+  ]},
+  { id:"users", n:"od_users", g:"org", x:240, y:470, r:6, f:[
+    {n:"id",t:"uuid",pk:1},{n:"full_name",t:"text"},{n:"email",t:"text"},{n:"system_access",t:"text"},
+    {n:"role_id",t:"uuid",fk:"roles"},{n:"organisational_unit_id",t:"uuid",fk:"org_units"},{n:"supervisor_id",t:"uuid",fk:"users"}
+  ]},
+  { id:"org_units", n:"od_org_units", g:"org", x:240, y:690, r:5, f:[
+    {n:"id",t:"uuid",pk:1},{n:"organisationalunit",t:"text"},{n:"unittype",t:"text"},
+    {n:"manager_id",t:"uuid",fk:"users"},{n:"review_ids",t:"uuid[]"},{n:"role_ids",t:"uuid[]"},{n:"employment_ids",t:"uuid[]"}
+  ]},
+  { id:"employments", n:"od_employments", g:"org", x:240, y:910, r:6, f:[
+    {n:"id",t:"uuid",pk:1},{n:"start_date",t:"date"},{n:"employment_type",t:"text"},
+    {n:"user_id",t:"uuid",fk:"users"},{n:"department_id",t:"uuid",fk:"org_units"}
+  ]},
+  { id:"exec_portfolios", n:"od_exec_portfolios", g:"org", x:30, y:930, r:2, f:[
+    {n:"id",t:"uuid",pk:1},{n:"portfolio_name",t:"text"},{n:"professional_biography",t:"text"},
+    {n:"role_ids",t:"uuid[]"},{n:"owner_ids",t:"uuid[]"},{n:"employment_ids",t:"uuid[]"},{n:"location_ids",t:"uuid[]"},{n:"budget_ids",t:"uuid[]"}
+  ]},
+  { id:"stakeholder_groups", n:"od_stakeholder_groups", g:"org", x:30, y:1130, r:5, f:[
+    {n:"id",t:"uuid",pk:1},{n:"group_name",t:"text"},{n:"type",t:"text"},
+    {n:"company_id",t:"uuid",fk:"companies"}
+  ]},
+
+  // STRATEGY
+  { id:"synthesis", n:"od_synthesis", g:"str", x:500, y:60, r:1, f:[
+    {n:"id",t:"uuid",pk:1},{n:"synthesisid",t:"text"},{n:"details",t:"text"},
+    {n:"company_id",t:"uuid",fk:"companies"},{n:"strategy_id",t:"uuid",fk:"strategy"}
+  ]},
+  { id:"nine_decisions", n:"od_nine_decisions", g:"str", x:500, y:260, r:9, f:[
+    {n:"id",t:"uuid",pk:1},{n:"decision_area",t:"text"},{n:"decision_response",t:"text"},{n:"completion_status",t:"text"},
+    {n:"related_decision_id",t:"uuid",fk:"nine_decisions"}
+  ]},
+  { id:"values", n:"od_values", g:"str", x:710, y:60, r:4, f:[
+    {n:"id",t:"uuid",pk:1},{n:"value_name",t:"text"},{n:"definition",t:"text"},
+    {n:"approved_by_role_ids",t:"uuid[]"}
+  ]},
+  { id:"swot", n:"od_swot", g:"str", x:710, y:240, r:1, f:[
+    {n:"id",t:"uuid",pk:1},{n:"swot_name",t:"text"},{n:"s_strengths",t:"text"},{n:"w_weaknesses",t:"text"},
+    {n:"completed_by_id",t:"uuid",fk:"users"},{n:"company_ids",t:"uuid[]"}
+  ]},
+  { id:"business_model", n:"od_business_model", g:"str", x:710, y:440, r:1, f:[
+    {n:"id",t:"uuid",pk:1},{n:"business_model_name",t:"text"},{n:"business_model_statement",t:"text"},
+    {n:"performance_rating",t:"text"},{n:"review_ids",t:"uuid[]"}
+  ]},
+  { id:"strategy", n:"od_strategy", g:"str", x:500, y:460, r:1, f:[
+    {n:"id",t:"uuid",pk:1},{n:"strategy_name",t:"text"},{n:"start_date",t:"date"},{n:"end_date",t:"date"},
+    {n:"budget_id",t:"uuid",fk:"budgets"},{n:"review_ids",t:"uuid[]"},{n:"rasci_ids",t:"uuid[]"}
+  ]},
+  { id:"golden_threads", n:"od_ambition_golden_threads", g:"str", x:500, y:670, r:4, f:[
+    {n:"id",t:"uuid",pk:1},{n:"ambition_golden_thread",t:"text"},{n:"commitment_statement",t:"text"},
+    {n:"review_ids",t:"uuid[]"},{n:"rasci_ids",t:"uuid[]"}
+  ]},
+  { id:"habits", n:"od_habits", g:"str", x:710, y:650, r:3, f:[
+    {n:"id",t:"uuid",pk:1},{n:"habit",t:"text"},{n:"lead_measure",t:"text"},{n:"lag_measure",t:"text"},
+    {n:"review_ids",t:"uuid[]"},{n:"rasci_ids",t:"uuid[]"}
+  ]},
+
+  // EXECUTION
+  { id:"objectives", n:"od_objectives", g:"exe", x:940, y:60, r:5, f:[
+    {n:"id",t:"uuid",pk:1},{n:"objective",t:"text"},{n:"status",t:"text"},{n:"bsc_perspective",t:"text"},
+    {n:"strategy_id",t:"uuid",fk:"strategy"},{n:"review_ids",t:"uuid[]"},{n:"rasci_ids",t:"uuid[]"}
+  ]},
+  { id:"strategic_plans", n:"od_strategic_plans", g:"exe", x:1150, y:60, r:4, f:[
+    {n:"id",t:"uuid",pk:1},{n:"strategic_plan",t:"text"},{n:"plan_type",t:"text"},
+    {n:"assignee_id",t:"uuid",fk:"users"},{n:"budget_id",t:"uuid",fk:"budgets"}
+  ]},
+  { id:"plan_templates", n:"od_plan_templates", g:"exe", x:1150, y:270, r:5, f:[
+    {n:"id",t:"uuid",pk:1},{n:"plan_template_step_name",t:"text"},{n:"step",t:"text"},
+    {n:"strategy_id",t:"uuid",fk:"strategy"}
+  ]},
+  { id:"projects", n:"od_projects", g:"exe", x:940, y:290, r:5, f:[
+    {n:"id",t:"uuid",pk:1},{n:"project_name",t:"text"},{n:"status",t:"text"},{n:"budget_amount",t:"numeric"},
+    {n:"assignee_id",t:"uuid",fk:"users"},{n:"project_type_id",t:"uuid",fk:"project_types"},
+    {n:"objective_id",t:"uuid",fk:"objectives"},{n:"rasci_ids",t:"uuid[]"},{n:"risk_ids",t:"uuid[]"}
+  ]},
+  { id:"actions", n:"od_actions", g:"exe", x:940, y:540, r:8, f:[
+    {n:"id",t:"uuid",pk:1},{n:"actionid",t:"numeric"},{n:"action_name",t:"text"},{n:"status",t:"text"},
+    {n:"assignee_id",t:"uuid",fk:"users"}
+  ]},
+
+  // GOVERNANCE
+  { id:"kpis", n:"od_kpis", g:"gov", x:940, y:740, r:5, f:[
+    {n:"id",t:"uuid",pk:1},{n:"kpi_name",t:"text"},{n:"target_value",t:"numeric"},{n:"actual_value",t:"numeric"},
+    {n:"objective_id",t:"uuid",fk:"objectives"},{n:"owner_id",t:"uuid",fk:"users"}
+  ]},
+  { id:"budgets", n:"od_budgets", g:"gov", x:1150, y:480, r:5, f:[
+    {n:"id",t:"uuid",pk:1},{n:"budget_name",t:"text"},{n:"budget_amount",t:"numeric"},{n:"fiscal_year",t:"int"},
+    {n:"organisational_unit_id",t:"uuid",fk:"org_units"},{n:"currency_id",t:"uuid",fk:"currencies"}
+  ]},
+  { id:"risk_register", n:"od_risk_register", g:"gov", x:1150, y:710, r:4, f:[
+    {n:"id",t:"uuid",pk:1},{n:"risk_name",t:"text"},{n:"risk_score",t:"numeric"},{n:"level_of_risk",t:"text"},
+    {n:"control_owner_id",t:"uuid",fk:"users"}
+  ]},
+  { id:"rasci", n:"od_rasci", g:"gov", x:940, y:950, r:5, f:[
+    {n:"id",t:"uuid",pk:1},{n:"rasci_name",t:"text"},{n:"entity_type",t:"text"},
+    {n:"responsible",t:"uuid",fk:"users"},{n:"accountable",t:"uuid",fk:"users"},
+    {n:"supportive",t:"uuid",fk:"users"},{n:"consulted",t:"uuid",fk:"users"},{n:"informed",t:"uuid",fk:"users"}
+  ]},
+  { id:"review_schedule", n:"od_review_schedule", g:"gov", x:1150, y:930, r:5, f:[
+    {n:"id",t:"uuid",pk:1},{n:"review_name",t:"text"},{n:"review_frequency",t:"text"},
+    {n:"reviewer_id",t:"uuid",fk:"users"},{n:"policy_id",t:"uuid"}
+  ]},
+  { id:"gccs", n:"od_gccs", g:"gov", x:710, y:860, r:3, f:[
+    {n:"id",t:"uuid",pk:1},{n:"gcc_name",t:"text"},{n:"delivery_confidence",t:"int"},
+    {n:"project_owner_id",t:"uuid",fk:"users"},{n:"rasci_ids",t:"uuid[]"},{n:"risk_ids",t:"uuid[]"},{n:"company_ids",t:"uuid[]"}
+  ]},
+];
+
+// ── 18 Junction Tables ────────────────────────────────────────────
+const junctions = [
+  { id:"jt_actions_objectives", n:"jt_actions↔objectives", a:"actions", b:"objectives", x:940, y:170, },
+  { id:"jt_actions_plan_templates", n:"jt_actions↔plan_templates", a:"actions", b:"plan_templates", x:1060, y:440, },
+  { id:"jt_actions_projects", n:"jt_actions↔projects", a:"actions", b:"projects", x:860, y:440, },
+  { id:"jt_golden_objectives", n:"jt_golden_threads↔objectives", a:"golden_threads", b:"objectives", x:750, y:170, },
+  { id:"jt_golden_strategy", n:"jt_golden_threads↔strategy", a:"golden_threads", b:"strategy", x:440, y:580, },
+  { id:"jt_bmodel_synthesis", n:"jt_business_model↔synthesis", a:"business_model", b:"synthesis", x:630, y:300, },
+  { id:"jt_exec_habits", n:"jt_exec_portfolios↔habits", a:"exec_portfolios", b:"habits", x:400, y:860, },
+  { id:"jt_exec_objectives", n:"jt_exec_portfolios↔objectives", a:"exec_portfolios", b:"objectives", x:500, y:1000, },
+  { id:"jt_exec_plan_templates", n:"jt_exec_portfolios↔plan_tmpl", a:"exec_portfolios", b:"plan_templates", x:600, y:1060, },
+  { id:"jt_exec_projects", n:"jt_exec_portfolios↔projects", a:"exec_portfolios", b:"projects", x:500, y:1100, },
+  { id:"jt_exec_strategic_plans", n:"jt_exec_portfolios↔strat_plans", a:"exec_portfolios", b:"strategic_plans", x:600, y:1140, },
+  { id:"jt_gccs_projects", n:"jt_gccs↔projects", a:"gccs", b:"projects", x:830, y:680, },
+  { id:"jt_habits_values", n:"jt_habits↔values", a:"habits", b:"values", x:780, y:460, },
+  { id:"jt_nine_synthesis", n:"jt_nine_decisions↔synthesis", a:"nine_decisions", b:"synthesis", x:430, y:170, },
+  { id:"jt_objectives_strategy", n:"jt_objectives↔strategy", a:"objectives", b:"strategy", x:750, y:350, },
+  { id:"jt_plan_strategic", n:"jt_plan_templates↔strat_plans", a:"plan_templates", b:"strategic_plans", x:1200, y:180, },
+  { id:"jt_strategic_strategy", n:"jt_strategic_plans↔strategy", a:"strategic_plans", b:"strategy", x:850, y:120, },
+  { id:"jt_synthesis_values", n:"jt_synthesis↔values", a:"synthesis", b:"values", x:620, y:60, },
+];
+
+// Build all edges: direct FK + junction
+const edges = [];
+tables.forEach(t => {
+  t.f.filter(f => f.fk).forEach(f => {
+    edges.push({ from: t.id, to: f.fk, type: "fk", field: f.n });
+  });
+});
+junctions.forEach(j => {
+  edges.push({ from: j.id, to: j.a, type: "jt" });
+  edges.push({ from: j.id, to: j.b, type: "jt" });
+});
+
+const CARD_W = 175;
+const JT_W = 130;
+const JT_H = 22;
+const cardH = (t) => 30 + t.f.length * 13 + 6;
+const allItems = {};
+tables.forEach(t => allItems[t.id] = { ...t, isJt: false });
+junctions.forEach(j => allItems[j.id] = { ...j, isJt: true });
+
+function getCenter(item) {
+  if (item.isJt) return { x: item.x + JT_W/2, y: item.y + JT_H/2 };
+  return { x: item.x + CARD_W/2, y: item.y + cardH(item)/2 };
+}
+
+function getEdgePath(fromId, toId) {
+  const from = allItems[fromId], to = allItems[toId];
+  if (!from || !to) return "";
+  const fc = getCenter(from), tc = getCenter(to);
+  const dx = tc.x - fc.x, dy = tc.y - fc.y;
+  const cp = Math.max(Math.abs(dx), Math.abs(dy)) * 0.4;
+  if (Math.abs(dx) > Math.abs(dy)) {
+    const x1 = dx > 0 ? (from.isJt ? from.x+JT_W : from.x+CARD_W) : from.x;
+    const x2 = dx > 0 ? to.x : (to.isJt ? to.x+JT_W : to.x+CARD_W);
+    return `M ${x1} ${fc.y} C ${x1+Math.sign(dx)*cp} ${fc.y}, ${x2-Math.sign(dx)*cp} ${tc.y}, ${x2} ${tc.y}`;
+  }
+  const fh = from.isJt ? JT_H : cardH(from);
+  const th = to.isJt ? JT_H : cardH(to);
+  const y1 = dy > 0 ? from.y+fh : from.y;
+  const y2 = dy > 0 ? to.y : to.y+th;
+  return `M ${fc.x} ${y1} C ${fc.x} ${y1+Math.sign(dy)*cp}, ${tc.x} ${y2-Math.sign(dy)*cp}, ${tc.x} ${y2}`;
+}
+
+function App() {
+  const [hovered, setHovered] = useState(null);
+  const [selected, setSelected] = useState(null);
+  const [showJt, setShowJt] = useState(true);
+
+  const active = hovered || selected;
+  const conn = new Set();
+  const connEdges = new Set();
+  if (active) {
+    conn.add(active);
+    edges.forEach((e, i) => {
+      if (e.from === active || e.to === active) {
+        conn.add(e.from); conn.add(e.to);
+        connEdges.add(i);
+      }
+    });
+  }
+
+  const selT = selected ? allItems[selected] : null;
+  const selG = selT ? (selT.isJt ? G.jt : G[selT.g]) : null;
+
+  const totalRecs = tables.reduce((s,t) => s+t.r, 0);
+
+  return React.createElement('div', null,
+    // Header
+    React.createElement('div', { className: 'header' },
+      React.createElement('div', { className: 'logo' },
+        React.createElement('div', { className: 'logo-icon' }, 'C'),
+        React.createElement('span', { className: 'mono', style:{fontSize:'12px',color:'#64748b',letterSpacing:'0.06em'} }, 'CATALYST DMS'),
+        React.createElement('span', { style:{color:'#cbd5e1',margin:'0 6px'} }, '·'),
+        React.createElement('span', { style:{fontSize:'11px',color:'#94a3b8'} }, 'Complete Entity Relationship Diagram'),
+      ),
+      React.createElement('div', { className: 'controls' },
+        React.createElement('span', { className: 'mono', style:{fontSize:'10px',color:'#94a3b8'} },
+          tables.length + ' tables · ' + junctions.length + ' junctions · ' + edges.length + ' relationships · ' + totalRecs + ' records'
+        ),
+        React.createElement('button', { className: showJt ? 'active' : '', onClick: () => setShowJt(!showJt) },
+          showJt ? '⬤ Junction tables' : '○ Junction tables'
+        ),
+      ),
+    ),
+
+    // Legend
+    React.createElement('div', { style:{display:'flex',gap:'14px',padding:'12px 24px',flexWrap:'wrap',borderBottom:'1px solid #1e293b10'} },
+      Object.entries(G).map(([k, g]) =>
+        React.createElement('div', { key:k, style:{display:'flex',alignItems:'center',gap:'5px',fontSize:'10px',color:'#64748b'} },
+          React.createElement('div', { style:{width:'8px',height:'8px',borderRadius: k==='jt'?'50%':'2px',background:g.color} }),
+          g.label,
+          React.createElement('span', { className:'mono', style:{color:'#94a3b8',fontSize:'9px'} },
+            '(' + (k==='jt' ? junctions.length : tables.filter(t=>t.g===k).length) + ')'
+          ),
+        )
+      ),
+      React.createElement('div', { style:{display:'flex',alignItems:'center',gap:'5px',fontSize:'10px',color:'#64748b'} },
+        React.createElement('span', { style:{color:'#f59e0b',fontSize:'9px'} }, '🔑'), 'FK'
+      ),
+      React.createElement('div', { style:{display:'flex',alignItems:'center',gap:'5px',fontSize:'10px',color:'#64748b'} },
+        React.createElement('span', { style:{color:'#22c55e',fontSize:'9px'} }, '●'), 'PK'
+      ),
+      React.createElement('div', { style:{display:'flex',alignItems:'center',gap:'5px',fontSize:'10px',color:'#64748b'} },
+        React.createElement('div', { style:{width:'16px',height:'2px',background:'#7c3aed',borderRadius:'1px'} }),
+        'Many-to-many via JT'
+      ),
+    ),
+
+    // Canvas
+    React.createElement('div', { className: 'canvas', onClick: () => setSelected(null) },
+      React.createElement('div', { style:{position:'relative',width:'1400px',minHeight:'1220px',margin:'0 auto'} },
+
+        // SVG
+        React.createElement('svg', { style:{position:'absolute',top:0,left:0,width:'100%',height:'100%',pointerEvents:'none',zIndex:5} },
+          edges.map((e, i) => {
+            if (e.type === 'jt' && !showJt) return null;
+            const isJt = e.type === 'jt';
+            const isC = connEdges.has(i);
+            const hasA = active !== null;
+            const fromItem = allItems[e.from];
+            const color = isJt ? '#7c3aed' : (fromItem && !fromItem.isJt ? G[fromItem.g].color : '#64748b');
+            return React.createElement('path', {
+              key: i, d: getEdgePath(e.from, e.to), fill: 'none',
+              stroke: isC ? color : color + '30',
+              strokeWidth: isC ? 2 : isJt ? 0.8 : 1,
+              strokeDasharray: isJt ? '4,3' : 'none',
+              opacity: hasA ? (isC ? 0.85 : 0.06) : (isJt ? 0.25 : 0.4),
+              style: { transition: 'all 0.25s ease' },
+            });
+          }),
+        ),
+
+        // Junction table pills
+        showJt && junctions.map(j => {
+          const isC = conn.has(j.id);
+          const hasA = active !== null;
+          return React.createElement('div', {
+            key: j.id,
+            onMouseEnter: () => setHovered(j.id),
+            onMouseLeave: () => setHovered(null),
+            onClick: e => { e.stopPropagation(); setSelected(selected===j.id?null:j.id); },
+            style: {
+              position:'absolute', left:j.x, top:j.y,
+              width: JT_W, height: JT_H,
+              background: isC ? '#7c3aed15' : '#ffffff',
+              border: '1px solid ' + (isC ? '#7c3aed60' : '#cbd5e150'),
+              borderRadius: '11px', display:'flex', alignItems:'center', justifyContent:'center',
+              fontSize:'8px', color: isC ? '#c4b5fd' : '#64748b',
+              fontFamily:"'JetBrains Mono',monospace", cursor:'pointer',
+              transition:'all 0.25s', zIndex:10,
+              opacity: hasA ? (isC ? 1 : 0.15) : 0.7,
+              transform: isC ? 'scale(1.05)' : 'scale(1)',
+            }
+          }, j.n.replace('jt_',''));
+        }),
+
+        // Table cards
+        tables.map(t => {
+          const g = G[t.g];
+          const isC = conn.has(t.id);
+          const hasA = active !== null;
+          const dim = hasA && !isC;
+          return React.createElement('div', {
+            key: t.id,
+            onMouseEnter: () => setHovered(t.id),
+            onMouseLeave: () => setHovered(null),
+            onClick: e => { e.stopPropagation(); setSelected(selected===t.id?null:t.id); },
+            style: {
+              position:'absolute', left:t.x, top:t.y, width:CARD_W,
+              background:'#ffffff', border:'1px solid '+(isC ? g.color+'70':'#cbd5e1'),
+              borderRadius:'5px', overflow:'hidden', cursor:'pointer',
+              transition:'all 0.25s ease', zIndex:10,
+              opacity: dim ? 0.12 : 1,
+              transform: isC ? 'translateY(-2px)' : 'none',
+              boxShadow: isC ? '0 4px 20px '+g.color+'15' : 'none',
+            }
+          },
+            React.createElement('div', { style:{height:'3px',background:g.color} }),
+            React.createElement('div', { style:{padding:'6px 8px 3px',display:'flex',justifyContent:'space-between',alignItems:'center'} },
+              React.createElement('span', { style:{fontSize:'10px',fontWeight:600,color:'#0f172a',fontFamily:"'JetBrains Mono',monospace"} }, t.n.replace('od_','')),
+              React.createElement('span', { style:{fontSize:'8px',fontWeight:700,padding:'1px 4px',borderRadius:'3px',background:g.color+'20',color:g.color,fontFamily:"'JetBrains Mono',monospace"} }, t.r),
+            ),
+            React.createElement('div', { style:{padding:'1px 8px 5px'} },
+              t.f.map((f, j) =>
+                React.createElement('div', { key:j, style:{display:'flex',justifyContent:'space-between',fontSize:'8.5px',color:f.fk?'#64748b':'#64748b',fontFamily:"'JetBrains Mono',monospace",padding:'0.5px 0'} },
+                  React.createElement('span', null,
+                    f.pk ? React.createElement('span', {style:{color:'#22c55e'}}, '● ') : null,
+                    f.fk ? React.createElement('span', {style:{color:'#f59e0b'}}, '🔑') : null,
+                    f.n
+                  ),
+                  React.createElement('span', {style:{color:'#cbd5e1'}}, f.t),
+                )
+              )
+            ),
+          );
+        }),
+      ),
+    ),
+
+    // Detail panel
+    selected && allItems[selected] && React.createElement('div', null,
+      React.createElement('div', { style:{position:'fixed',inset:0,background:'#00000020',zIndex:100}, onClick:()=>setSelected(null) }),
+      React.createElement('div', { style:{
+        position:'fixed',top:0,right:0,bottom:0,width:'380px',
+        background:'#cbd5e1',borderLeft:'1px solid '+selG.color+'25',
+        zIndex:200,overflowY:'auto',padding:'24px',
+        animation:'slideIn 0.2s ease-out',
+      }},
+        React.createElement('style', null, '@keyframes slideIn{from{transform:translateX(30px);opacity:0}to{transform:translateX(0);opacity:1}}'),
+        React.createElement('button', { onClick:()=>setSelected(null), style:{
+          position:'absolute',top:12,right:12,background:'none',border:'1px solid #1e293b',
+          borderRadius:'4px',color:'#64748b',cursor:'pointer',width:'26px',height:'26px',
+          fontSize:'13px',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'inherit',
+        }}, '×'),
+
+        // Header
+        React.createElement('div', { style:{display:'flex',alignItems:'center',gap:'8px',marginBottom:'4px'} },
+          React.createElement('div', { style:{width:'10px',height:'10px',borderRadius: selT.isJt?'50%':'2px',background:selG.color} }),
+          React.createElement('span', { className:'mono', style:{fontSize:'9px',color:selG.color,textTransform:'uppercase',letterSpacing:'0.08em'} }, selG.label),
+        ),
+        React.createElement('div', { className:'mono', style:{fontSize:'17px',fontWeight:600,color:'#0f172a',marginBottom:'4px'} },
+          selT.isJt ? 'catalyst.' + selT.n.replace('↔','_') : 'catalyst.' + selT.n
+        ),
+        !selT.isJt && React.createElement('div', { style:{fontSize:'11px',color:'#64748b',marginBottom:'16px'} }, selT.r + ' records seeded'),
+        selT.isJt && React.createElement('div', { style:{fontSize:'11px',color:'#64748b',marginBottom:'16px'} }, 'Many-to-many relationship between ' + selT.a + ' and ' + selT.b),
+
+        // Fields (for od_ tables)
+        !selT.isJt && React.createElement('div', { style:{marginBottom:'16px'} },
+          React.createElement('div', { className:'mono', style:{fontSize:'9px',color:'#64748b',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:'8px'} }, 'Columns'),
+          selT.f.map((f, i) =>
+            React.createElement('div', { key:i, style:{
+              display:'flex',justifyContent:'space-between',alignItems:'center',
+              padding:'5px 8px',background:'#0f172a',borderRadius:'3px',marginBottom:'2px',
+              borderLeft:'3px solid '+(f.pk?'#22c55e':f.fk?'#f59e0b':'#cbd5e1'),
+            }},
+              React.createElement('div', null,
+                React.createElement('span', { className:'mono', style:{fontSize:'11px',color:'#cbd5e1'} }, f.n),
+                f.fk && React.createElement('span', { className:'mono', style:{fontSize:'9px',color:'#f59e0b',marginLeft:'6px'} }, '→ od_'+f.fk),
+              ),
+              React.createElement('span', { className:'mono', style:{fontSize:'9px',color:'#94a3b8'} }, f.t),
+            )
+          ),
+        ),
+
+        // Junction table structure
+        selT.isJt && React.createElement('div', { style:{marginBottom:'16px'} },
+          React.createElement('div', { className:'mono', style:{fontSize:'9px',color:'#64748b',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:'8px'} }, 'Composite Primary Key'),
+          ['od_'+selT.a+'_id', 'od_'+selT.b+'_id', 'org_id'].map((col, i) =>
+            React.createElement('div', { key:i, style:{
+              display:'flex',alignItems:'center',gap:'6px',
+              padding:'5px 8px',background:'#0f172a',borderRadius:'3px',marginBottom:'2px',
+              borderLeft:'3px solid '+(i<2?'#7c3aed':'#64748b'),
+            }},
+              React.createElement('span', { className:'mono', style:{fontSize:'11px',color:'#cbd5e1'} }, col),
+              React.createElement('span', { className:'mono', style:{fontSize:'9px',color:'#64748b'} }, 'uuid' + (i<2?' FK':'')),
+            )
+          ),
+        ),
+
+        // Relationships
+        React.createElement('div', null,
+          React.createElement('div', { className:'mono', style:{fontSize:'9px',color:'#64748b',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:'8px'} }, 'Connections'),
+
+          // Outgoing FKs
+          !selT.isJt && selT.f.filter(f=>f.fk).length > 0 && React.createElement('div', {style:{marginBottom:'10px'}},
+            React.createElement('div', {style:{fontSize:'10px',color:'#64748b',marginBottom:'4px'}}, '→ References (direct FK)'),
+            selT.f.filter(f=>f.fk).map((f,i) => {
+              const target = allItems[f.fk];
+              const tg = target && !target.isJt ? G[target.g] : G.ref;
+              return React.createElement('div', {key:i, style:{
+                display:'flex',alignItems:'center',gap:'6px',
+                padding:'4px 8px',background:'#0f172a',borderRadius:'3px',marginBottom:'2px',
+              }},
+                React.createElement('span', {style:{color:'#f59e0b',fontSize:'9px'}}, '🔑'),
+                React.createElement('span', {className:'mono',style:{fontSize:'10px',color:'#cbd5e1'}}, f.n),
+                React.createElement('span', {style:{color:'#64748b',fontSize:'9px'}}, '→'),
+                React.createElement('span', {className:'mono',style:{fontSize:'10px',color:tg.color}}, 'od_'+f.fk),
+              );
+            }),
+          ),
+
+          // Incoming FKs
+          (() => {
+            const incoming = edges.filter(e => e.to === selected && e.type === 'fk');
+            return incoming.length > 0 && React.createElement('div', {style:{marginBottom:'10px'}},
+              React.createElement('div', {style:{fontSize:'10px',color:'#64748b',marginBottom:'4px'}}, '← Referenced by (direct FK)'),
+              incoming.map((e,i) => {
+                const src = allItems[e.from];
+                const sg = src && !src.isJt ? G[src.g] : G.ref;
+                return React.createElement('div', {key:i, style:{
+                  display:'flex',alignItems:'center',gap:'6px',
+                  padding:'4px 8px',background:'#0f172a',borderRadius:'3px',marginBottom:'2px',
+                }},
+                  React.createElement('span', {className:'mono',style:{fontSize:'10px',color:sg.color}}, src ? src.n : e.from),
+                  React.createElement('span', {className:'mono',style:{fontSize:'9px',color:'#64748b'}}, 'via ' + e.field),
+                );
+              }),
+            );
+          })(),
+
+          // Junction table links
+          (() => {
+            const jtLinks = junctions.filter(j => j.a === selected || j.b === selected);
+            return jtLinks.length > 0 && React.createElement('div', null,
+              React.createElement('div', {style:{fontSize:'10px',color:'#7c3aed',marginBottom:'4px'}}, '↔ Many-to-many (via junction)'),
+              jtLinks.map((j,i) => {
+                const other = j.a === selected ? j.b : j.a;
+                const otherItem = allItems[other];
+                const og = otherItem && !otherItem.isJt ? G[otherItem.g] : G.ref;
+                return React.createElement('div', {key:i, style:{
+                  display:'flex',alignItems:'center',gap:'6px',
+                  padding:'4px 8px',background:'#7c3aed08',border:'1px solid #7c3aed15',borderRadius:'3px',marginBottom:'2px',
+                }},
+                  React.createElement('span', {style:{color:'#7c3aed',fontSize:'9px'}}, '⬤'),
+                  React.createElement('span', {className:'mono',style:{fontSize:'10px',color:og.color}}, 'od_'+other),
+                  React.createElement('span', {className:'mono',style:{fontSize:'8px',color:'#64748b'}}, 'via '+j.n.replace('↔','_')),
+                );
+              }),
+            );
+          })(),
+        ),
+      ),
+    ),
+
+    // Hint
+    React.createElement('div', { style:{
+      position:'fixed',bottom:'16px',left:'50%',transform:'translateX(-50%)',
+      fontSize:'10px',color:'#94a3b8',background:'#cbd5e1',border:'1px solid #1e293b30',
+      borderRadius:'4px',padding:'5px 14px',zIndex:40,fontFamily:"'JetBrains Mono',monospace",
+    }}, 'hover to trace · click for details · '+tables.length+' tables + '+junctions.length+' junctions · '+edges.length+' relationships'),
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+</script>
+</body>
+</html>
